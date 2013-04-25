@@ -156,6 +156,9 @@ MIN_SEARCH_FREQUENCY = 10
 
 DEFAULT_SEARCH_FREQUENCY = 60
 
+LIBTORRENT_AVAILABLE = False
+USE_LIBTORRENT = False
+
 EZRSS = False
 SHOWRSS = False
 KAT = False
@@ -344,6 +347,7 @@ def initialize(consoleLogging=True):
                 USE_PLEX, PLEX_NOTIFY_ONSNATCH, PLEX_NOTIFY_ONDOWNLOAD, PLEX_UPDATE_LIBRARY, \
                 PLEX_SERVER_HOST, PLEX_HOST, PLEX_USERNAME, PLEX_PASSWORD, \
                 showUpdateScheduler, __INITIALIZED__, LAUNCH_BROWSER, showList, loadingShowList, \
+                LIBTORRENT_AVAILABLE, USE_LIBTORRENT, \
                 SHOWRSS, KAT, DAILYTVTORRENTS, PUBLICHD, \
                 NZBS, NZBS_UID, NZBS_HASH, EZRSS, TVTORRENTS, TVTORRENTS_DIGEST, TVTORRENTS_HASH, BTN, BTN_API_KEY, TORRENTLEECH, TORRENTLEECH_KEY, \
                 TORRENT_DIR, USENET_RETENTION, SOCKET_TIMEOUT, \
@@ -737,6 +741,14 @@ def initialize(consoleLogging=True):
         NMA_NOTIFY_ONDOWNLOAD = bool(check_setting_int(CFG, 'NMA', 'nma_notify_ondownload', 0))
         NMA_API = check_setting_str(CFG, 'NMA', 'nma_api', '')
         NMA_PRIORITY = check_setting_str(CFG, 'NMA', 'nma_priority', "0")
+        
+        logger.log(u'importing downloader', logger.ERROR)
+        from sickbeard import downloader
+        logger.log(u'imported downloader libtorrent is %s available' % ('' if downloader.LIBTORRENT_AVAILABLE else 'NOT'),
+                   logger.ERROR)
+        CheckSection(CFG, 'Libtorrent')
+        USE_LIBTORRENT = bool(check_setting_int(CFG, 'Libtorrent', 'use_libtorrent', 0))
+        LIBTORRENT_AVAILABLE = downloader.LIBTORRENT_AVAILABLE
 
         # start up all the threads
         logger.sb_log_instance.initLogging(consoleLogging=consoleLogging)
