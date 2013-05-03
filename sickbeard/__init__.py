@@ -456,8 +456,8 @@ def initialize(consoleLogging=True):
         NAMING_MULTI_EP = check_setting_int(CFG, 'General', 'naming_multi_ep', 1)
         NAMING_FORCE_FOLDERS = naming.check_force_season_folders()
 
-        USE_NZBS = bool(check_setting_int(CFG, 'General', 'use_nzbs', 1))
-        USE_TORRENTS = bool(check_setting_int(CFG, 'General', 'use_torrents', 0))
+        USE_NZBS = bool(check_setting_int(CFG, 'General', 'use_nzbs', 0))
+        USE_TORRENTS = bool(check_setting_int(CFG, 'General', 'use_torrents', 1))
         USE_VODS = bool(check_setting_int(CFG, 'General', 'use_vods', 0))
 
         NZB_METHOD = check_setting_str(CFG, 'General', 'nzb_method', 'blackhole')
@@ -481,7 +481,7 @@ def initialize(consoleLogging=True):
         EZRSS = bool(check_setting_int(CFG, 'General', 'use_torrent', 0))
         if not EZRSS:
             CheckSection(CFG, 'EZRSS')
-            EZRSS = bool(check_setting_int(CFG, 'EZRSS', 'ezrss', 0))
+            EZRSS = bool(check_setting_int(CFG, 'EZRSS', 'ezrss', 1))
 
         GIT_PATH = check_setting_str(CFG, 'General', 'git_path', '')
         IGNORE_WORDS = check_setting_str(CFG, 'General', 'ignore_words', IGNORE_WORDS)
@@ -566,7 +566,7 @@ def initialize(consoleLogging=True):
         TORRENT_DIR = check_setting_str(CFG, 'Blackhole', 'torrent_dir', '')
         
         CheckSection(CFG, 'SHOWRSS')
-        SHOWRSS = bool(check_setting_int(CFG, 'SHOWRSS', 'showrss', 0))
+        SHOWRSS = bool(check_setting_int(CFG, 'SHOWRSS', 'showrss', 1))
         
         CheckSection(CFG, 'KAT')
         KAT = bool(check_setting_int(CFG, 'KAT', 'kat', 0))
@@ -575,7 +575,7 @@ def initialize(consoleLogging=True):
         DAILYTVTORRENTS = bool(check_setting_int(CFG, 'DAILYTVTORRENTS', 'dailytvtorrents', 0))
         
         CheckSection(CFG, 'PUBLICHD')
-        PUBLICHD = bool(check_setting_int(CFG, 'PUBLICHD', 'publichd', 0))
+        PUBLICHD = bool(check_setting_int(CFG, 'PUBLICHD', 'publichd', 1))
 
         CheckSection(CFG, 'TVTORRENTS')
         TVTORRENTS = bool(check_setting_int(CFG, 'TVTORRENTS', 'tvtorrents', 0))
@@ -614,7 +614,7 @@ def initialize(consoleLogging=True):
         WOMBLE = bool(check_setting_int(CFG, 'Womble', 'womble', 1))
         
         CheckSection(CFG, 'Iplayer')
-        IPLAYER = bool(check_setting_int(CFG, 'Iplayer', 'Iplayer', 1))
+        IPLAYER = bool(check_setting_int(CFG, 'Iplayer', 'Iplayer', 0))
         IPLAYER_GETIPLAYER_PATH = check_setting_int(CFG, 'Iplayer', 'get_iplayer_path', '')
 
         CheckSection(CFG, 'nzbX')
