@@ -77,6 +77,7 @@ showQueueScheduler = None
 searchQueueScheduler = None
 properFinderScheduler = None
 autoPostProcesserScheduler = None
+torrentProcessScheduler = None
 
 showList = None
 loadingShowList = None
@@ -156,8 +157,9 @@ MIN_SEARCH_FREQUENCY = 10
 
 DEFAULT_SEARCH_FREQUENCY = 60
 
-LIBTORRENT_AVAILABLE = False
 USE_LIBTORRENT = False
+LIBTORRENT_WORKING_DIR = None
+LIBTORRENT_SEED_TO_RATIO = 0.1 # for test.  Prod value should be >= 1.0
 
 EZRSS = False
 SHOWRSS = False
@@ -347,7 +349,7 @@ def initialize(consoleLogging=True):
                 USE_PLEX, PLEX_NOTIFY_ONSNATCH, PLEX_NOTIFY_ONDOWNLOAD, PLEX_UPDATE_LIBRARY, \
                 PLEX_SERVER_HOST, PLEX_HOST, PLEX_USERNAME, PLEX_PASSWORD, \
                 showUpdateScheduler, __INITIALIZED__, LAUNCH_BROWSER, showList, loadingShowList, \
-                LIBTORRENT_AVAILABLE, USE_LIBTORRENT, \
+                USE_LIBTORRENT, LIBTORRENT_WORKING_DIR, LIBTORRENT_SEED_TO_RATIO, torrentProcessScheduler, \
                 SHOWRSS, KAT, DAILYTVTORRENTS, PUBLICHD, \
                 NZBS, NZBS_UID, NZBS_HASH, EZRSS, TVTORRENTS, TVTORRENTS_DIGEST, TVTORRENTS_HASH, BTN, BTN_API_KEY, TORRENTLEECH, TORRENTLEECH_KEY, \
                 TORRENT_DIR, USENET_RETENTION, SOCKET_TIMEOUT, \
@@ -611,7 +613,7 @@ def initialize(consoleLogging=True):
         NEWZBIN_PASSWORD = check_setting_str(CFG, 'Newzbin', 'newzbin_password', '')
 
         CheckSection(CFG, 'Womble')
-        WOMBLE = bool(check_setting_int(CFG, 'Womble', 'womble', 1))
+        WOMBLE = bool(check_setting_int(CFG, 'Womble', 'womble', 0))
         
         CheckSection(CFG, 'Iplayer')
         IPLAYER = bool(check_setting_int(CFG, 'Iplayer', 'Iplayer', 0))
@@ -742,13 +744,13 @@ def initialize(consoleLogging=True):
         NMA_API = check_setting_str(CFG, 'NMA', 'nma_api', '')
         NMA_PRIORITY = check_setting_str(CFG, 'NMA', 'nma_priority', "0")
         
-        logger.log(u'importing downloader', logger.ERROR)
+        logger.log(u'importing downloader', logger.DEBUG)
         from sickbeard import downloader
-        logger.log(u'imported downloader libtorrent is %s available' % ('' if downloader.LIBTORRENT_AVAILABLE else 'NOT'),
-                   logger.ERROR)
+        logger.log(u'imported downloader libtorrent is %savailable' % ('' if downloader.LIBTORRENT_AVAILABLE else 'NOT '),
+                   logger.MESSAGE)
         CheckSection(CFG, 'Libtorrent')
-        USE_LIBTORRENT = bool(check_setting_int(CFG, 'Libtorrent', 'use_libtorrent', 0))
-        LIBTORRENT_AVAILABLE = downloader.LIBTORRENT_AVAILABLE
+        USE_LIBTORRENT = bool(check_setting_int(CFG, 'Libtorrent', 'use_libtorrent', 1)) and downloader.LIBTORRENT_AVAILABLE
+        LIBTORRENT_WORKING_DIR = check_setting_str(CFG, 'Libtorrent', 'working_dir', os.path.join(DATA_DIR, 'lt_working_dir'))
 
         # start up all the threads
         logger.sb_log_instance.initLogging(consoleLogging=consoleLogging)
@@ -809,6 +811,12 @@ def initialize(consoleLogging=True):
                                                                       threadName="BACKLOG",
                                                                       runImmediately=True)
         backlogSearchScheduler.action.cycleTime = BACKLOG_SEARCH_FREQUENCY
+        
+        torrentProcessScheduler = scheduler.Scheduler(downloader.TorrentProcessHandler(),
+                                                     cycleTime=datetime.timedelta(seconds=15),
+                                                     threadName="TORRENTHANDLER",
+                                                     runImmediately=False,
+                                                     silent=True)
 
         showList = []
         loadingShowList = {}
@@ -822,6 +830,7 @@ def start():
     global __INITIALIZED__, currentSearchScheduler, backlogSearchScheduler, \
             showUpdateScheduler, versionCheckScheduler, showQueueScheduler, \
             properFinderScheduler, autoPostProcesserScheduler, searchQueueScheduler, \
+            torrentProcessScheduler, \
             started
 
     with INIT_LOCK:
@@ -851,6 +860,9 @@ def start():
 
             # start the proper finder
             autoPostProcesserScheduler.thread.start()
+            
+            # thread for controlling running torrents
+            torrentProcessScheduler.thread.start()
 
             started = True
 
@@ -859,6 +871,7 @@ def halt():
 
     global __INITIALIZED__, currentSearchScheduler, backlogSearchScheduler, showUpdateScheduler, \
             showQueueScheduler, properFinderScheduler, autoPostProcesserScheduler, searchQueueScheduler, \
+            torrentProcessScheduler, \
             started
 
     with INIT_LOCK:
@@ -922,6 +935,17 @@ def halt():
             logger.log(u"Waiting for the PROPERFINDER thread to exit")
             try:
                 properFinderScheduler.thread.join(10)
+            except:
+                pass
+            
+            torrentProcessScheduler.action.shutDownImmediate = True
+            torrentProcessScheduler.forceRun()
+            torrentProcessScheduler.abort = True
+            logger.log(u"Waiting for the {0} thread to exit".format(torrentProcessScheduler.threadName))
+            try:
+                # we give this thread a full 60 seconds to end, because it may
+                # have running torrents that need to be tidied-up
+                torrentProcessScheduler.thread.join(60)
             except:
                 pass
 

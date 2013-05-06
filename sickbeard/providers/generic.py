@@ -36,6 +36,7 @@ from sickbeard.common import Quality, MULTI_EP_RESULT, SEASON_RESULT
 from sickbeard import tvcache
 from sickbeard import encodingKludge as ek
 from sickbeard.exceptions import ex
+from sickbeard import downloader
 
 from lib.hachoir_parser import createParser
 
@@ -492,47 +493,53 @@ class TorrentProvider(GenericProvider):
     
     def downloadResult(self, result):
         """
-        Overridden to handle magnet links (using multiple fallbacks)
+        Overridden to handle magnet links (using multiple fallbacks), and now libtorrent
+        downloads also.
         """
         logger.log(u"Downloading a result from " + self.name+" at " + result.url)
         
-        if result.url and result.url.startswith('magnet:'):
-            torrent_hash = self.getHashFromMagnet(result.url)
-            if torrent_hash:
-                urls = [url_fmt % torrent_hash for url_fmt in MAGNET_TO_TORRENT_URLS]
-            else:
-                logger.log(u"Failed to handle magnet url %s, skipping..." % torrent_hash, logger.DEBUG)
-                return False
+        if sickbeard.USE_LIBTORRENT:
+            return downloader.download_from_torrent(result.url)
         else:
-            urls = [result.url]
+            # Ye olde way, using blackhole ...
             
-        # use the result name as the filename
-        fileName = ek.ek(os.path.join, sickbeard.TORRENT_DIR, helpers.sanitizeFileName(result.name) + '.' + self.providerType)
-            
-        for url in urls:
-            logger.log(u"Trying d/l url: " + url, logger.DEBUG)
-            data = self.getURL(url)
-            
-            if data == None:
-                logger.log(u"Got no data for " + url, logger.DEBUG)
-                # fall through to next iteration
-            elif not data.startswith("d8:announce") and not data.startswith("d12:_info_length"):
-                logger.log(u"d/l url %s failed, not a valid torrent file" % (url), logger.MESSAGE)
-            else:
-                try:
-                    fileOut = open(fileName, 'wb')
-                    fileOut.write(data)
-                    fileOut.close()
-                    helpers.chmodAsParent(fileName)
-                except IOError, e:
-                    logger.log("Unable to save the file: "+ex(e), logger.ERROR)
+            if result.url and result.url.startswith('magnet:'):
+                torrent_hash = self.getHashFromMagnet(result.url)
+                if torrent_hash:
+                    urls = [url_fmt % torrent_hash for url_fmt in MAGNET_TO_TORRENT_URLS]
+                else:
+                    logger.log(u"Failed to handle magnet url %s, skipping..." % torrent_hash, logger.DEBUG)
                     return False
+            else:
+                urls = [result.url]
                 
-                logger.log(u"Success with url: " + url, logger.DEBUG)
-                return True
-        else:
-            logger.log(u"All d/l urls have failed.  Sorry.", logger.MESSAGE)
-            return False
+            # use the result name as the filename
+            fileName = ek.ek(os.path.join, sickbeard.TORRENT_DIR, helpers.sanitizeFileName(result.name) + '.' + self.providerType)
+                
+            for url in urls:
+                logger.log(u"Trying d/l url: " + url, logger.DEBUG)
+                data = self.getURL(url)
+                
+                if data == None:
+                    logger.log(u"Got no data for " + url, logger.DEBUG)
+                    # fall through to next iteration
+                elif not data.startswith("d8:announce") and not data.startswith("d12:_info_length"):
+                    logger.log(u"d/l url %s failed, not a valid torrent file" % (url), logger.MESSAGE)
+                else:
+                    try:
+                        fileOut = open(fileName, 'wb')
+                        fileOut.write(data)
+                        fileOut.close()
+                        helpers.chmodAsParent(fileName)
+                    except IOError, e:
+                        logger.log("Unable to save the file: "+ex(e), logger.ERROR)
+                        return False
+                    
+                    logger.log(u"Success with url: " + url, logger.DEBUG)
+                    return True
+            else:
+                logger.log(u"All d/l urls have failed.  Sorry.", logger.MESSAGE)
+                return False
         
         
         return False
