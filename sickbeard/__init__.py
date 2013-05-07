@@ -32,7 +32,7 @@ from threading import Lock
 from sickbeard import providers, metadata
 from providers import ezrss, tvtorrents, torrentleech, btn, nzbsrus, newznab, womble, nzbx, omgwtfnzbs
 from providers import showrss, kat, dailytvtorrents, iplayer, publichd, anyrss
-from sickbeard.config import CheckSection, check_setting_int, check_setting_str, ConfigMigrator
+from sickbeard.config import CheckSection, check_setting_int, check_setting_str, ConfigMigrator, check_setting_float
 
 from sickbeard import searchCurrent, searchBacklog, showUpdater, versionChecker, properFinder, autoPostProcesser
 from sickbeard import helpers, db, exceptions, show_queue, search_queue, scheduler
@@ -158,8 +158,11 @@ MIN_SEARCH_FREQUENCY = 10
 DEFAULT_SEARCH_FREQUENCY = 60
 
 USE_LIBTORRENT = False
+LIBTORRENT_AVAILABLE = False
 LIBTORRENT_WORKING_DIR = None
-LIBTORRENT_SEED_TO_RATIO = 0.1 # for test.  Prod value should be >= 1.0
+LIBTORRENT_SEED_TO_RATIO = 1.1
+LIBTORRENT_MAX_DL_SPEED = 0
+LIBTORRENT_MAX_UL_SPEED = 0
 
 EZRSS = False
 SHOWRSS = False
@@ -349,7 +352,8 @@ def initialize(consoleLogging=True):
                 USE_PLEX, PLEX_NOTIFY_ONSNATCH, PLEX_NOTIFY_ONDOWNLOAD, PLEX_UPDATE_LIBRARY, \
                 PLEX_SERVER_HOST, PLEX_HOST, PLEX_USERNAME, PLEX_PASSWORD, \
                 showUpdateScheduler, __INITIALIZED__, LAUNCH_BROWSER, showList, loadingShowList, \
-                USE_LIBTORRENT, LIBTORRENT_WORKING_DIR, LIBTORRENT_SEED_TO_RATIO, torrentProcessScheduler, \
+                USE_LIBTORRENT, LIBTORRENT_AVAILABLE, LIBTORRENT_WORKING_DIR, LIBTORRENT_SEED_TO_RATIO, \
+                LIBTORRENT_MAX_DL_SPEED, LIBTORRENT_MAX_UL_SPEED, torrentProcessScheduler, \
                 SHOWRSS, KAT, DAILYTVTORRENTS, PUBLICHD, \
                 NZBS, NZBS_UID, NZBS_HASH, EZRSS, TVTORRENTS, TVTORRENTS_DIGEST, TVTORRENTS_HASH, BTN, BTN_API_KEY, TORRENTLEECH, TORRENTLEECH_KEY, \
                 TORRENT_DIR, USENET_RETENTION, SOCKET_TIMEOUT, \
@@ -744,16 +748,25 @@ def initialize(consoleLogging=True):
         NMA_API = check_setting_str(CFG, 'NMA', 'nma_api', '')
         NMA_PRIORITY = check_setting_str(CFG, 'NMA', 'nma_priority', "0")
         
-        logger.log(u'importing downloader', logger.DEBUG)
+        lt_log_messages = []
+        lt_log_messages.append((u'importing downloader', logger.DEBUG))
         from sickbeard import downloader
-        logger.log(u'imported downloader libtorrent is %savailable' % ('' if downloader.LIBTORRENT_AVAILABLE else 'NOT '),
-                   logger.MESSAGE)
+        LIBTORRENT_AVAILABLE = downloader.LIBTORRENT_AVAILABLE
+        lt_log_messages.append((u'libtorrent is %savailable' % ('' if LIBTORRENT_AVAILABLE else 'NOT '),
+                   logger.MESSAGE))
         CheckSection(CFG, 'Libtorrent')
-        USE_LIBTORRENT = bool(check_setting_int(CFG, 'Libtorrent', 'use_libtorrent', 1)) and downloader.LIBTORRENT_AVAILABLE
+        USE_LIBTORRENT = bool(check_setting_int(CFG, 'Libtorrent', 'use_libtorrent', 1)) and LIBTORRENT_AVAILABLE
         LIBTORRENT_WORKING_DIR = check_setting_str(CFG, 'Libtorrent', 'working_dir', os.path.join(DATA_DIR, 'lt_working_dir'))
+        LIBTORRENT_MAX_UL_SPEED = check_setting_int(CFG, 'Libtorrent', 'max_ul_speed', 0)
+        LIBTORRENT_MAX_DL_SPEED = check_setting_int(CFG, 'Libtorrent', 'max_dl_speed', 0)
+        LIBTORRENT_SEED_TO_RATIO = check_setting_float(CFG, 'Libtorrent', 'seed_to_ratio', 1.1)
 
         # start up all the threads
         logger.sb_log_instance.initLogging(consoleLogging=consoleLogging)
+        
+        # Now that logging is started, we can log any messages from the downloader import above
+        for m in lt_log_messages:
+            logger.log(m[0], m[1])
 
         # initialize the main SB database
         db.upgradeDatabase(db.DBConnection(), mainDB.InitialSchema)
@@ -881,6 +894,11 @@ def halt():
             logger.log(u"Aborting all threads")
 
             # abort all the threads
+            
+            # we *start* by sending an early notification to libtorrent, b/c it
+            # will probably need to save state etc.
+            torrentProcessScheduler.action.shutDownImmediate = True
+            torrentProcessScheduler.forceRun()
 
             currentSearchScheduler.abort = True
             logger.log(u"Waiting for the SEARCH thread to exit")
@@ -938,8 +956,6 @@ def halt():
             except:
                 pass
             
-            torrentProcessScheduler.action.shutDownImmediate = True
-            torrentProcessScheduler.forceRun()
             torrentProcessScheduler.abort = True
             logger.log(u"Waiting for the {0} thread to exit".format(torrentProcessScheduler.threadName))
             try:
@@ -1293,6 +1309,13 @@ def save_config():
     new_config['GUI']['coming_eps_layout'] = COMING_EPS_LAYOUT
     new_config['GUI']['coming_eps_display_paused'] = int(COMING_EPS_DISPLAY_PAUSED)
     new_config['GUI']['coming_eps_sort'] = COMING_EPS_SORT
+    
+    new_config['Libtorrent'] = {}
+    new_config['Libtorrent']['use_libtorrent'] = int(USE_LIBTORRENT)
+    new_config['Libtorrent']['working_dir'] = LIBTORRENT_WORKING_DIR
+    new_config['Libtorrent']['max_ul_speed'] = int(LIBTORRENT_MAX_UL_SPEED)
+    new_config['Libtorrent']['max_dl_speed'] = int(LIBTORRENT_MAX_DL_SPEED)
+    new_config['Libtorrent']['seed_to_ratio'] = float(LIBTORRENT_SEED_TO_RATIO)
 
     new_config['General']['config_version'] = CONFIG_VERSION
 

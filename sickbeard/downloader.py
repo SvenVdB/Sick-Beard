@@ -119,12 +119,30 @@ def download_from_torrent(torrent, postProcessingDone=False):
         logger.log('Error trying to download via libtorrent: ' + ex(e), logger.ERROR)
         return False
     
+def set_max_dl_speed(max_dl_speed):
+    """
+    Set the download rate limit for libtorrent if it's running
+    @param max_dl_speed: integer.  Rate in kB/s 
+    """
+    sess = _get_session(False)
+    if sess:
+        _lt_sess.set_download_rate_limit(max_dl_speed * 1024)
+
+def set_max_ul_speed(max_ul_speed):
+    """
+    Set the upload rate limit for libtorrent if it's running
+    @param max_ul_speed: integer.  Rate in kB/s 
+    """
+    sess = _get_session(False)
+    if sess:
+        _lt_sess.set_upload_rate_limit(max_ul_speed * 1024)
+    
 def _get_session(createIfNeeded=True):
     global _lt_sess
     if _lt_sess is None and createIfNeeded:
         _lt_sess = lt.session()
-        _lt_sess.set_download_rate_limit(0)
-        _lt_sess.set_upload_rate_limit(0)
+        _lt_sess.set_download_rate_limit(sickbeard.LIBTORRENT_MAX_DL_SPEED * 1024)
+        _lt_sess.set_upload_rate_limit(sickbeard.LIBTORRENT_MAX_UL_SPEED * 1024)
         
         settings = lt.session_settings()
         settings.user_agent = 'sickbeard_bricky-{0}/{1}'.format(version.SICKBEARD_VERSION.replace(' ', '-'), lt.version)

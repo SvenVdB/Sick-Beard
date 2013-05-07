@@ -772,7 +772,8 @@ class ConfigSearch:
     @cherrypy.expose
     def saveSearch(self, use_nzbs=None, use_torrents=None, use_vods=None, nzb_dir=None, sab_username=None, sab_password=None,
                        sab_apikey=None, sab_category=None, sab_host=None, nzbget_password=None, nzbget_category=None, nzbget_host=None,
-                       torrent_dir=None, nzb_method=None, usenet_retention=None, search_frequency=None, download_propers=None):
+                       torrent_dir=None, nzb_method=None, usenet_retention=None, search_frequency=None, download_propers=None,
+                       use_libtorrent=None, seed_to_ratio=None, max_dl_speed=None, max_ul_speed=None, libtorrent_working_dir=None):
 
         results = []
 
@@ -781,8 +782,55 @@ class ConfigSearch:
 
         if not config.change_TORRENT_DIR(torrent_dir):
             results += ["Unable to create directory " + os.path.normpath(torrent_dir) + ", dir not changed."]
+            
+        if libtorrent_working_dir != sickbeard.LIBTORRENT_WORKING_DIR:
+            #@todo: implement this!
+            msg = u'Unable to change the libtorrent working directory while running (NOT IMPLEMENTED). ' + \
+                u'If necessary, you can change it by stopping sickbeard, then changing the config.ini value "working_dir". ' + \
+                u'(This will be implemented in time, but it\'s not an immediate priority)'
+            logger.log(msg, logger.ERROR)
+            results += [msg]
 
         config.change_SEARCH_FREQUENCY(search_frequency)
+        
+        use_libtorrent = 1 if use_libtorrent == 'on' else 0
+        
+        try:
+            seed_to_ratio = 1.1 if seed_to_ratio == "" else float(seed_to_ratio)
+            if seed_to_ratio <= 0.0:
+                seed_to_ratio = 0.0 
+                logger.log(u'You have set your seed ratio to 0.  This makes you all take, with no give.  ' + \
+                    u'Please feel appropriately guilty for a moment, and do something nice for someone to make up for it.', logger.MESSAGE)
+        except Exception, e:
+            msg = u'Unable to make a float from "{0}", setting seed_to_ratio to 1.1'.format(seed_to_ratio)
+            logger.log(msg + ': ' + ex(e), logger.ERROR)
+            results += [msg]
+            seed_to_ratio = 1.1
+            
+        try:
+            max_dl_speed = 0 if max_dl_speed == "" else int(max_dl_speed)
+            if max_dl_speed < 0: 
+                max_dl_speed = 0
+        except Exception, e:
+            msg = u'Unable to make an int from "{0}", setting max_dl_speed to 0 (auto)'.format(max_dl_speed)
+            logger.log(msg + u': ' + ex(e), logger.ERROR)
+            results += [msg]
+            max_dl_speed = 0
+            
+        config.change_LIBTORRENT_DL_SPEED(max_dl_speed)
+        
+            
+        try:
+            max_ul_speed = 0 if max_ul_speed == "" else int(max_ul_speed)
+            if max_ul_speed < 0: 
+                max_ul_speed = 0
+        except Exception, e:
+            msg = u'Unable to make an int from "{0}", setting max_ul_speed to 0 (auto)'.format(max_ul_speed)
+            logger.log(msg + u': ' + ex(e), logger.ERROR)
+            results += [msg]
+            max_ul_speed = 0
+            
+        config.change_LIBTORRENT_UL_SPEED(max_ul_speed)
 
         if download_propers == "on":
             download_propers = 1
@@ -832,6 +880,10 @@ class ConfigSearch:
         sickbeard.NZBGET_PASSWORD = nzbget_password
         sickbeard.NZBGET_CATEGORY = nzbget_category
         sickbeard.NZBGET_HOST = nzbget_host
+        
+        
+        sickbeard.USE_LIBTORRENT = use_libtorrent
+        sickbeard.LIBTORRENT_SEED_TO_RATIO = seed_to_ratio
 
 
         sickbeard.save_config()
